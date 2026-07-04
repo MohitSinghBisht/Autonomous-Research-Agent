@@ -9,7 +9,7 @@ from langsmith import traceable
 
 from .config import Settings
 from .dedup import deduplicate_results
-from .fetchers import fetch_with_tool
+from .fetchers import TavilyFetcher, fetch_with_tool
 from .llm import OpenAIReasoner
 from .models import (
     AgentState,
@@ -120,6 +120,7 @@ def _format_summary(summary: Summary, low_confidence: bool) -> str:
 
 def build_research_graph(settings: Settings):
     reasoner = OpenAIReasoner(settings)
+    tavily_fetcher = TavilyFetcher(settings)
     builder = StateGraph(AgentState)
 
     def run_node(node_name: str, state: AgentState, work):
@@ -312,8 +313,7 @@ def build_research_graph(settings: Settings):
 
             try:
                 tool_output = fetch_with_tool(
-                    reasoner=reasoner,
-                    model=settings.light_model,
+                    fetcher=tavily_fetcher,
                     query=state["user_query"]["mssg"],
                     tool_name=tool_name,
                     tool_reasoning=tool_reasoning,

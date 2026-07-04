@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import queue
 from pathlib import Path
 import sys
 from typing import Any
@@ -144,6 +145,8 @@ APP_CSS = """
         border-radius: 8px;
         background: #ffffff;
         color: var(--ink);
+        caret-color: var(--accent);
+        cursor: text;
         font-size: 1rem;
         padding-left: 0.95rem;
     }
@@ -151,6 +154,7 @@ APP_CSS = """
     div[data-testid="stTextInput"] input:focus {
         border-color: var(--accent);
         box-shadow: 0 0 0 2px rgba(0,109,119,0.12);
+        outline: none;
     }
 
     div[data-testid="stFormSubmitButton"] button {
@@ -239,31 +243,6 @@ APP_CSS = """
         line-height: 1.45;
     }
 
-    .node-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.45rem;
-    }
-
-    .node-item {
-        border: 1px solid #e5ecef;
-        border-radius: 8px;
-        background: #fbfcfd;
-        padding: 0.52rem 0.6rem;
-    }
-
-    .node-name {
-        font-size: 0.84rem;
-        font-weight: 700;
-        color: var(--ink);
-    }
-
-    .node-state {
-        color: var(--muted);
-        font-size: 0.78rem;
-        margin-top: 0.12rem;
-    }
-
     .metric-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -311,14 +290,41 @@ APP_CSS = """
         color: var(--muted);
     }
 
-    .log-path {
-        border: 1px solid #e4eaee;
-        border-radius: 8px;
-        background: #f8fbfc;
-        padding: 0.65rem;
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%       { opacity: 0.35; transform: scale(0.82); }
+    }
+
+    .running-banner {
+        border: 1.5px solid var(--accent);
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--accent-soft), rgba(255,255,255,0.9));
+        padding: 1.15rem 1.3rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 4px 18px rgba(0,109,119,0.12);
+    }
+
+    .running-dot {
+        flex-shrink: 0;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: pulse-dot 1.1s ease-in-out infinite;
+    }
+
+    .running-title {
+        font-weight: 700;
+        color: var(--accent);
+        font-size: 0.95rem;
+    }
+
+    .running-sub {
         color: var(--muted);
         font-size: 0.82rem;
-        word-break: break-all;
+        margin-top: 0.2rem;
     }
 
     @media (max-width: 900px) {
@@ -346,16 +352,7 @@ SUGGESTIONS = [
     "Recent AI chip supply chain risks for startups in 2026",
 ]
 
-NODE_ORDER = [
-    "query_review",
-    "improve_query",
-    "choose_tools",
-    "validator",
-    "research_worker",
-    "deduplicate",
-    "mastery",
-    "exhaustion_fallback",
-]
+
 
 
 def init_state() -> None:
@@ -410,16 +407,6 @@ def get_references(result: dict[str, Any] | None) -> list[Any]:
     return summary.references if hasattr(summary, "references") else summary.get("references", [])
 
 
-def build_node_snapshot() -> list[tuple[str, str]]:
-    status_map = {node: "Waiting" for node in NODE_ORDER}
-    for message in st.session_state.run_messages:
-        text = message.lower()
-        for node in NODE_ORDER:
-            if f"starting node: {node}" in text:
-                status_map[node] = "Running"
-            if f"finished node: {node}" in text:
-                status_map[node] = "Done"
-    return [(node.replace("_", " ").title(), status_map[node]) for node in NODE_ORDER]
 
 
 def render_header() -> None:
@@ -507,22 +494,16 @@ def render_progress() -> None:
     )
 
 
-def render_node_map() -> None:
-    items = []
-    for label, state in build_node_snapshot():
-        items.append(
-            f"""
-            <div class="node-item">
-                <div class="node-name">{label}</div>
-                <div class="node-state">{state}</div>
-            </div>
-            """
-        )
+
+def render_running_banner() -> None:
     st.markdown(
-        f"""
-        <div class="panel">
-            <div class="panel-title">Graph nodes</div>
-            <div class="node-grid">{''.join(items)}</div>
+        """
+        <div class="running-banner">
+            <div class="running-dot"></div>
+            <div>
+                <div class="running-title">Research in progress…</div>
+                <div class="running-sub">Searching, validating, and synthesising sources. This usually takes 30–90 seconds.</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -592,20 +573,6 @@ def render_results(result: dict[str, Any] | None) -> None:
             st.caption("No JSONL events found.")
 
 
-def render_run_dock(result: dict[str, Any] | None) -> None:
-    log_path = (result or {}).get("run_log_path") or st.session_state.run_log_path or "Unavailable"
-    st.markdown(
-        f"""
-        <div class="panel">
-            <div class="panel-title">Run dock</div>
-            <div class="log-path">{log_path}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    if result:
-        with st.expander("Raw final state", expanded=False):
-            st.json(make_json_safe({key: value for key, value in result.items() if key != "logger"}))
 
 
 def render_sidebar() -> None:
@@ -621,22 +588,24 @@ def render_sidebar() -> None:
             st.caption("No events yet.")
 
 
-def run_query(query: str, progress_slot: Any, node_slot: Any) -> None:
+def run_query(query: str) -> None:
     st.session_state.run_messages = []
     st.session_state.run_events = []
     st.session_state.run_result = None
     st.session_state.run_log_path = None
 
+    # Thread-safe queues: background threads (LangGraph’s ThreadPoolExecutor for
+    # parallel research_worker nodes) cannot access st.session_state directly.
+    # Callbacks push into these queues; we drain them on the main thread after
+    # run_agent() returns.
+    _msg_queue: queue.Queue[str] = queue.Queue()
+    _evt_queue: queue.Queue[tuple[str, dict[str, Any]]] = queue.Queue()
+
     def handle_message(message: str) -> None:
-        st.session_state.run_messages.append(message)
-        with progress_slot.container():
-            render_progress()
-        with node_slot.container():
-            render_node_map()
+        _msg_queue.put(message)
 
     def handle_event(event: str, payload: dict[str, Any]) -> None:
-        st.session_state.run_events.append({"event": event, "payload": payload})
-        st.session_state.run_log_path = payload.get("payload", {}).get("log_path", st.session_state.run_log_path)
+        _evt_queue.put((event, payload))
 
     logger = RunLogger(
         echo_terminal=False,
@@ -645,6 +614,17 @@ def run_query(query: str, progress_slot: Any, node_slot: Any) -> None:
     )
     st.session_state.run_log_path = str(logger.log_path)
     result = run_agent(query, logger=logger)
+
+    # Back on the main Streamlit thread — drain queues into session_state.
+    while not _msg_queue.empty():
+        st.session_state.run_messages.append(_msg_queue.get_nowait())
+    while not _evt_queue.empty():
+        event, payload = _evt_queue.get_nowait()
+        st.session_state.run_events.append({"event": event, "payload": payload})
+        st.session_state.run_log_path = payload.get("payload", {}).get(
+            "log_path", st.session_state.run_log_path
+        )
+
     st.session_state.run_result = result
     st.session_state.run_log_path = result.get("run_log_path")
     push_recent_query(query)
@@ -659,28 +639,26 @@ def main() -> None:
 
     left_col, right_col = st.columns([1.55, 0.9], gap="large")
     with right_col:
-        progress_slot = st.empty()
-        node_slot = st.empty()
-        dock_slot = st.empty()
+        status_slot = st.empty()
     with left_col:
         result_slot = st.empty()
 
-    with progress_slot.container():
+    with status_slot.container():
         render_progress()
-    with node_slot.container():
-        render_node_map()
-    with dock_slot.container():
-        render_run_dock(st.session_state.run_result)
     with result_slot.container():
         render_results(st.session_state.run_result)
 
     if submitted and query.strip():
-        with st.spinner("Running research graph..."):
-            run_query(query.strip(), progress_slot, node_slot)
+        # Render the running banner immediately into the slot before the
+        # blocking run_agent call — st.empty() flushes to the browser right away.
+        with status_slot.container():
+            render_running_banner()
+        run_query(query.strip())
+        # Replace the banner with the completed run-status log.
+        with status_slot.container():
+            render_progress()
         with result_slot.container():
             render_results(st.session_state.run_result)
-        with dock_slot.container():
-            render_run_dock(st.session_state.run_result)
 
     render_sidebar()
 

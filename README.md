@@ -132,10 +132,18 @@ The LangGraph state tracks:
 
 Every LLM node appends a reasoning entry to `reasoning_log`.
 
-## Notes on the OpenAI ecosystem
+## Notes on the architecture
 
-- LLM reasoning is handled through the OpenAI Python SDK.
-- External information gathering uses OpenAI web search.
+- LLM reasoning is handled through the OpenAI Python SDK (query review, tool selection, validation, synthesis).
+- External information gathering uses **Tavily** (`tavily-python`) instead of OpenAI web search.
+  - Tavily is purpose-built for LLM/agent use and returns pre-extracted clean text — no additional
+    HTML parsing step needed.
+  - The three research tools are differentiated entirely through Tavily's native `include_domains`
+    parameter and a query suffix, defined as static profiles in `fetchers.py`.
+  - `general_web_search` → unrestricted Tavily call.
+  - `official_docs_search` → Tavily call restricted to known government and standards-body domains.
+  - `expert_analysis_search` → Tavily call restricted to reputable analysis outlets, query nudged
+    with `" expert analysis"`.
 - The parallel fan-out step uses worker-style tool jobs, not independent autonomous agents with their own tool loops.
 - The implementation is intentionally small and readable rather than deeply abstracted.
 
