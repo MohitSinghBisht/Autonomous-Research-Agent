@@ -1,0 +1,176 @@
+# Autonomous Research Agent
+
+This project implements a simple autonomous research agent using the OpenAI ecosystem and LangGraph. It accepts a user query, decides whether the query is usable, chooses research tools, gathers evidence from external sources through OpenAI web search, removes duplicates, and produces a structured final summary.
+
+## What this project does
+
+- Accepts a user topic or query
+- Uses LLM reasoning for query review, tool choice, validation, and synthesis
+- Searches external sources through OpenAI's web search tool
+- Deduplicates overlapping evidence with a non-LLM heuristic
+- Produces:
+  - Key points
+  - Important findings
+  - References
+  - Actionable insights when applicable
+
+## Architecture
+
+The workflow follows the plan in [Plan.md](/Users/apple/Documents/Autonomous%20Research%20Agent/Plan.md):
+
+1. Query review
+2. Query improvement when needed
+3. Tool selection
+4. Validator loop
+5. Parallel research workers
+6. Deduplication
+7. Mastery synthesis
+8. Exhaustion fallback if the retry budget is spent
+
+## Project structure
+
+```text
+src-layout project root
+├── src/autonomous_research_agent/
+├── venv/
+├── .env
+├── pyproject.toml
+├── requirements.txt
+├── streamlit_app.py
+└── README.md
+```
+
+- `src/autonomous_research_agent/` holds the actual application code.
+- `venv/` stays at the project root, not inside `src/`, because it is an environment, not part of the package.
+- `.env` also belongs at the project root so config can load cleanly.
+
+Package contents:
+
+```text
+src/autonomous_research_agent/
+  config.py
+  models.py
+  prompts.py
+  llm.py
+  fetchers.py
+  dedup.py
+  graph.py
+  cli.py
+requirements.txt
+.env.example
+README.md
+streamlit_app.py
+```
+
+## Setup
+
+1. Create a virtual environment.
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Install the project in editable mode:
+
+```bash
+pip install -e .
+```
+
+4. Copy `.env.example` to `.env` and fill in your OpenAI API key.
+
+## Run
+
+```bash
+autonomous-research-agent "latest developments in battery recycling policy in Europe"
+```
+
+Optional markdown export:
+
+```bash
+autonomous-research-agent "latest developments in battery recycling policy in Europe" --output report.md
+```
+
+## Streamlit UI
+
+The project also includes an Arc-inspired search-first Streamlit interface with:
+
+- a centered landing search box
+- live node-by-node progress updates
+- structured summary rendering
+- references and reasoning logs
+- local JSONL log inspection in the sidebar
+
+Run it with either of these:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+or, if you have not installed the package in editable mode:
+
+```bash
+PYTHONPATH=src streamlit run streamlit_app.py
+```
+
+## State design
+
+The LangGraph state tracks:
+
+- `user_query`
+- `available_tool_calls`
+- `tried_combinations`
+- `proceeded_tool_calls_with_reasoning`
+- `mastery_feedback`
+- `attempt_count`
+- `MAX_ATTEMPTS`
+- `low_confidence`
+- `raw_results`
+- `filtered_results`
+- `summary`
+- `reasoning_log`
+
+Every LLM node appends a reasoning entry to `reasoning_log`.
+
+## Notes on the OpenAI ecosystem
+
+- LLM reasoning is handled through the OpenAI Python SDK.
+- External information gathering uses OpenAI web search.
+- The parallel fan-out step uses worker-style tool jobs, not independent autonomous agents with their own tool loops.
+- The implementation is intentionally small and readable rather than deeply abstracted.
+
+## Observability
+
+- Terminal progress logs are printed as each graph node starts, finishes, and routes to the next step.
+- A local JSONL run log is saved under `logs/` with step-by-step input state, output update, and state-after-node snapshots.
+- The Streamlit UI reuses the same logger so progress can be shown live inside the app while the agent runs.
+- LangSmith tracing is enabled through:
+  - `wrap_openai(...)` around the OpenAI client
+  - `@traceable` on the top-level graph run and tool fetch function
+
+Required environment variables for LangSmith:
+
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=your_langsmith_key
+LANGSMITH_PROJECT=your_project_name
+```
+
+If your LangSmith account is outside the default US region, also set `LANGSMITH_ENDPOINT`.
+
+## Deduplication note
+
+Deduplication is the one deliberate non-LLM step. It uses string similarity on titles and content snippets. This is a data hygiene step, not a judgment step.
+
+## Known scope decisions
+
+- Cache-hit routing is not implemented.
+- Improved queries are not re-validated through the first node. This is deliberate to avoid recursion loops.
+- Clarification is implemented as a simple response path instead of a full `interrupt()` resume workflow.
+- Exhaustion fallback returns a best-effort answer marked as low confidence.
+
+## Suggested next improvements
+
+- Add a real checkpointer and `interrupt()`-based clarification flow
+- Add lightweight unit tests with mocked LLM responses
+- Add more specialized tool profiles
