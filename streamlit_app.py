@@ -445,6 +445,7 @@ def render_query_panel() -> tuple[bool, str]:
             placeholder="Example: latest developments in battery recycling policy in Europe",
             label_visibility="collapsed",
         )
+        st.caption("Note: Abbrevation/Short Forms are currently not supported")
         submitted = st.form_submit_button("Run Research", use_container_width=True, type="primary")
 
     st.markdown('<div class="label-row">Suggested queries</div>', unsafe_allow_html=True)

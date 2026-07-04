@@ -194,9 +194,3 @@ Deduplication is the one deliberate non-LLM step. It uses string similarity on t
 - Improved queries are not re-validated through the first node. This is deliberate to avoid recursion loops.
 - Clarification is implemented as a simple response path instead of a full `interrupt()` resume workflow.
 - Exhaustion fallback returns a best-effort answer marked as low confidence.
-
-## Suggested next improvements
-
-- Add a real checkpointer and `interrupt()`-based clarification flow
-- Add lightweight unit tests with mocked LLM responses
-- Add more specialized tool profiles
