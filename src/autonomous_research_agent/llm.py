@@ -25,6 +25,7 @@ class OpenAIReasoner:
         user_prompt: str,
         schema: type[SchemaT],
         use_web_search: bool = False,
+        temperature: float = 1.0,
     ) -> SchemaT:
         request_kwargs = {
             "model": model,
@@ -33,6 +34,7 @@ class OpenAIReasoner:
                 {"role": "user", "content": user_prompt},
             ],
             "text_format": schema,
+            "temperature": temperature,
         }
 
         if use_web_search:

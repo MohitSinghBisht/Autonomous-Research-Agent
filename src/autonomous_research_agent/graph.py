@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from itertools import combinations
 from typing import Any
 
@@ -45,6 +46,11 @@ def _append_reasoning(node_name: str, reasoning: str) -> list[str]:
     return [f"{node_name}: {reasoning.strip()}"]
 
 
+def _inject_date(prompt: str) -> str:
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    return f"{prompt}\n\n# System Information\nCurrent Date: {current_date}"
+
+
 def _combo_key(tool_names: list[str]) -> list[str]:
     return sorted(tool_names)
 
@@ -81,6 +87,7 @@ def _build_best_effort_summary(results: list[RawResult]) -> Summary:
     for reference, result in zip(references, results, strict=False):
         findings.append(Finding(claim=result.content[:220].strip(), source_id=reference.id))
     return Summary(
+        summary="A best-effort summary could not be fully synthesized due to retry exhaustion.",
         key_points=key_points,
         findings=findings,
         references=references,
@@ -93,6 +100,10 @@ def _format_summary(summary: Summary, low_confidence: bool) -> str:
     if low_confidence:
         lines.append("This summary is best-effort and may be incomplete because the agent exhausted its retry budget.")
         lines.append("")
+
+    lines.append("## Summary")
+    lines.append(summary.summary)
+    lines.append("")
 
     lines.append("## Key Points")
     for point in summary.key_points:
@@ -107,7 +118,7 @@ def _format_summary(summary: Summary, low_confidence: bool) -> str:
     lines.append("## References")
     for reference in summary.references:
         suffix = f" - {reference.url}" if reference.url else ""
-        lines.append(f"- {reference.id}: {reference.title} [{reference.source_tool}]{suffix}")
+        lines.append(f"- {reference.id}: {reference.title}{suffix}")
 
     if summary.actionable_insights:
         lines.append("")
@@ -139,9 +150,10 @@ def build_research_graph(settings: Settings):
                     "mssg": (
                         result := reasoner.parse_structured(
                             model=settings.light_model,
-                            system_prompt=QUERY_REVIEW_SYSTEM_PROMPT,
+                            system_prompt=_inject_date(QUERY_REVIEW_SYSTEM_PROMPT),
                             user_prompt=state["user_query"]["mssg"],
                             schema=QueryReviewOutput,
+                            temperature=settings.temp_query_review,
                         )
                     ).user_mssg,
                     "relevancy": result.relevant,
@@ -184,9 +196,10 @@ def build_research_graph(settings: Settings):
                     "mssg": (
                         result := reasoner.parse_structured(
                             model=settings.light_model,
-                            system_prompt=IMPROVE_QUERY_SYSTEM_PROMPT,
+                            system_prompt=_inject_date(IMPROVE_QUERY_SYSTEM_PROMPT),
                             user_prompt=state["user_query"]["mssg"],
                             schema=ImproveQueryOutput,
+                            temperature=settings.temp_improve_query,
                         )
                     ).improved_mssg,
                     "relevancy": True,
@@ -204,7 +217,7 @@ def build_research_graph(settings: Settings):
                 "selected_tool_calls": (
                     result := reasoner.parse_structured(
                         model=settings.mid_model,
-                        system_prompt=TOOL_SELECTION_SYSTEM_PROMPT,
+                        system_prompt=_inject_date(TOOL_SELECTION_SYSTEM_PROMPT),
                         user_prompt=(
                             f"Query: {state['user_query']['mssg']}\n"
                             f"Available tools: {state['available_tool_calls']}\n"
@@ -212,6 +225,7 @@ def build_research_graph(settings: Settings):
                             f"Mastery feedback: {state.get('mastery_feedback') or 'None'}"
                         ),
                         schema=ToolSelectionOutput,
+                        temperature=settings.temp_choose_tools,
                     )
                 ).tool_selected,
                 "reasoning_log": _append_reasoning("choose_tools", result.reasoning),
@@ -223,7 +237,7 @@ def build_research_graph(settings: Settings):
             selected = _combo_key(state["selected_tool_calls"])
             result = reasoner.parse_structured(
                 model=settings.mid_model,
-                system_prompt=VALIDATOR_SYSTEM_PROMPT,
+                system_prompt=_inject_date(VALIDATOR_SYSTEM_PROMPT),
                 user_prompt=(
                     f"Query: {state['user_query']['mssg']}\n"
                     f"Selected tools: {selected}\n"
@@ -233,6 +247,7 @@ def build_research_graph(settings: Settings):
                     f"Mastery feedback: {state.get('mastery_feedback') or 'None'}"
                 ),
                 schema=ValidatorOutput,
+                temperature=settings.temp_validator,
             )
             updates: dict[str, Any] = {
                 "validator_output": result,
@@ -369,9 +384,10 @@ def build_research_graph(settings: Settings):
 
             result = reasoner.parse_structured(
                 model=settings.heavy_model,
-                system_prompt=MASTERY_SYSTEM_PROMPT,
+                system_prompt=_inject_date(MASTERY_SYSTEM_PROMPT),
                 user_prompt=user_prompt,
                 schema=MasteryOutput,
+                temperature=settings.temp_mastery,
             )
 
             updates: dict[str, Any] = {

@@ -38,6 +38,7 @@ class Reference(BaseModel):
 
 
 class Summary(BaseModel):
+    summary: str
     key_points: list[str] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)

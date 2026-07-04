@@ -17,6 +17,11 @@ class Settings:
     mid_model: str = "gpt-4.1-mini"
     heavy_model: str = "gpt-4.1"
     max_attempts: int = 4
+    temp_query_review: float = 0.1
+    temp_improve_query: float = 0.2
+    temp_choose_tools: float = 0.1
+    temp_validator: float = 0.0
+    temp_mastery: float = 0.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -35,4 +40,9 @@ class Settings:
             mid_model=os.getenv("OPENAI_MID_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini",
             heavy_model=os.getenv("OPENAI_HEAVY_MODEL", "gpt-4.1").strip() or "gpt-4.1",
             max_attempts=int(os.getenv("MAX_ATTEMPTS", "4")),
+            temp_query_review=float(os.getenv("TEMP_QUERY_REVIEW", "0.2")),
+            temp_improve_query=float(os.getenv("TEMP_IMPROVE_QUERY", "0.4")),
+            temp_choose_tools=float(os.getenv("TEMP_CHOOSE_TOOLS", "0.2")),
+            temp_validator=float(os.getenv("TEMP_VALIDATOR", "0.0")),
+            temp_mastery=float(os.getenv("TEMP_MASTERY", "0.4")),
         )

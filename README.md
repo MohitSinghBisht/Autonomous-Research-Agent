@@ -57,27 +57,43 @@ src/autonomous_research_agent/
   graph.py
   cli.py
 requirements.txt
-.env.example
+example.env
 README.md
 streamlit_app.py
 ```
 
 ## Setup
 
-1. Create a virtual environment.
-2. Install dependencies:
+1. **Clone the repository and enter the directory**:
+```bash
+git clone https://github.com/MohitSinghBisht/Autonomous-Research-Agent.git
+cd "Autonomous Research Agent"
+```
 
+2. **Create and activate a virtual environment**:
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+```
+
+3. **Install dependencies**:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Install the project in editable mode:
-
+4. **Install the project in editable mode**:
 ```bash
 pip install -e .
 ```
 
-4. Copy `.env.example` to `.env` and fill in your OpenAI API key.
+5. **Configure environment variables**:
+Copy the example environment file:
+```bash
+cp example.env .env
+```
+Then open `.env` and fill in your API keys:
+- `OPENAI_API_KEY`: Required for LLM reasoning.
+- `TAVILY_API_KEY`: Required for web search capabilities.
 
 ## Run
 
@@ -165,6 +181,8 @@ LANGSMITH_PROJECT=your_project_name
 ```
 
 If your LangSmith account is outside the default US region, also set `LANGSMITH_ENDPOINT`.
+
+Langsmith example log: https://smith.langchain.com/public/82d8ba7a-c7b7-4206-813d-e55212923521/r/019f2ece-fc8c-7ca1-8e72-b33414337e95
 
 ## Deduplication note
 

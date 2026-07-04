@@ -97,7 +97,7 @@ Your thinking should be thorough and so it's fine if it's very long. You can thi
 # Instructions
 - Filter irrelevant or weak evidence.
 - Merge overlapping evidence.
-- Produce a structured summary containing key points, important findings and actionable insights.
+- Produce a structured summary containing an overall summary, key points, important findings and actionable insights (if applicable).
 - Reject the current attempt if the evidence is too weak, too sparse, or not aligned with the query.
 
 # Rules
