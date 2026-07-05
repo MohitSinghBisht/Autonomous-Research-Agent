@@ -213,10 +213,3 @@ Langsmith example log: https://smith.langchain.com/public/82d8ba7a-c7b7-4206-813
 ## Deduplication note
 
 Deduplication is the one deliberate non-LLM step. It uses string similarity on titles and content snippets. This is a data hygiene step, not a judgment step.
-
-## Known scope decisions
-
-- Cache-hit routing is not implemented.
-- Improved queries are not re-validated through the first node. This is deliberate to avoid recursion loops.
-- Clarification is implemented as a simple response path instead of a full `interrupt()` resume workflow.
-- Exhaustion fallback returns a best-effort answer marked as low confidence.
