@@ -1,12 +1,12 @@
 # Autonomous Research Agent
 
-This project implements a simple autonomous research agent using the OpenAI ecosystem and LangGraph. It accepts a user query, decides whether the query is usable, chooses research tools, gathers evidence from external sources through OpenAI web search, removes duplicates, and produces a structured final summary.
+This project implements a simple autonomous research agent using the OpenAI ecosystem and LangGraph. It accepts a user query, decides whether the query is usable, chooses research tools, gathers evidence from external sources through Tavily search, removes duplicates, and produces a structured final summary.
 
 ## What this project does
 
 - Accepts a user topic or query
 - Uses LLM reasoning for query review, tool choice, validation, and synthesis
-- Searches external sources through OpenAI's web search tool
+- Searches external sources through Tavily's search API
 - Deduplicates overlapping evidence with a non-LLM heuristic
 - Produces:
   - Key points
@@ -16,7 +16,27 @@ This project implements a simple autonomous research agent using the OpenAI ecos
 
 ## Architecture
 
-The workflow follows the plan in [Plan.md](/Users/apple/Documents/Autonomous%20Research%20Agent/Plan.md):
+The workflow follows this plan:
+
+```mermaid
+graph TD
+    __start__([START]) --> query_review
+    query_review -. "irrelevant" .-> clarification
+    query_review -. "incomplete" .-> improve_query
+    query_review -. "valid" .-> choose_tools
+    clarification --> __end__([END])
+    improve_query --> choose_tools
+    choose_tools --> validator
+    validator -. "re_iterate" .-> choose_tools
+    validator -. "exhausted" .-> exhaustion_fallback
+    validator -. "approved" .-> research_worker
+    research_worker --> deduplicate
+    deduplicate --> mastery
+    mastery -. "accepted" .-> __end__
+    mastery -. "exhausted" .-> exhaustion_fallback
+    mastery -. "rejected" .-> choose_tools
+    exhaustion_fallback --> __end__
+```
 
 1. Query review
 2. Query improvement when needed
@@ -95,7 +115,13 @@ Then open `.env` and fill in your API keys:
 - `OPENAI_API_KEY`: Required for LLM reasoning.
 - `TAVILY_API_KEY`: Required for web search capabilities.
 
-## Run
+6. **Run the Application UI**:
+This project provides a web interface for using the application. Start it by running the Streamlit app:
+```bash
+streamlit run streamlit_app.py
+```
+
+## Run CLI
 
 ```bash
 autonomous-research-agent "latest developments in battery recycling policy in Europe"
